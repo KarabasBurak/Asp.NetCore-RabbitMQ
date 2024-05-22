@@ -3,6 +3,7 @@
 
 
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using System.Text;
 
 var factory = new ConnectionFactory(); // ConnectionFactory sınıfından factory adında nesne oluşturduk.
@@ -12,15 +13,17 @@ using var connection = factory.CreateConnection(); // factory nesnesi üzerinden
 
 var channel = connection.CreateModel(); // RabbitMQ'ya bu kanal üzerinden bağlanacağız.
 
-channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
+//channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
+
+channel.ExchangeDeclare("logs-fanout", durable: true, type: ExchangeType.Fanout); // üst satırda mesajları direkt kuyruğa gönderiyorduk. Burada Exchange üzerinden kuyruğa göndereceğiz. Fark bu
 
 Enumerable.Range(1, 50).ToList().ForEach(x =>
 {
-    string message = $"Message {x}";
+    string message = $"log {x}";
 
     var messageBody = Encoding.UTF8.GetBytes(message);
 
-    channel.BasicPublish(string.Empty, "hello-queue", null, messageBody);
+    channel.BasicPublish("logs-fanout", " " , null, messageBody);
 
     Console.WriteLine($"Mesaj Gönderilmiştir : {message}");
 });
