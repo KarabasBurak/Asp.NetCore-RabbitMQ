@@ -14,6 +14,17 @@ var channel = connection.CreateModel(); // RabbitMQ'ya bu kanal üzerinden bağl
 
 channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
 
+Enumerable.Range(1, 50).ToList().ForEach(x =>
+{
+    string message = $"Message {x}";
+
+    var messageBody = Encoding.UTF8.GetBytes(message);
+
+    channel.BasicPublish(string.Empty, "hello-queue", null, messageBody);
+
+    Console.WriteLine($"Mesaj Gönderilmiştir : {message}");
+});
+
 string message = "hello world"; // Kuyruktaki mesajı tanımladık.
 
 var messageBody=Encoding.UTF8.GetBytes(message);
