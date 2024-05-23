@@ -19,26 +19,23 @@ namespace UdemyRabbitMQ.Subscriber
             using var connection = factory.CreateConnection();
             var channel = connection.CreateModel();
             channel.BasicQos(0, 1, false);
-
-            var logTypes = new string[] { "Critical", "Error", "Warning", "Info" };
-
-            foreach (var logType in logTypes)
-            {
-                var queueName = $"direct-queue-{logType}";
-                var subscriber = new EventingBasicConsumer(channel);
-                subscriber.Received += (sender, e) =>
-                {
-                    var message = Encoding.UTF8.GetString(e.Body.ToArray());
-                    Thread.Sleep(1500);
-                    Console.WriteLine($"Gelen Mesaj: {message}");
-                    // File.AppendAllText($"log-{logType.ToLower()}.txt", message + "\n");
-                    channel.BasicAck(e.DeliveryTag, false);
-                };
-
-                channel.BasicConsume(queueName, false, subscriber);
-            }
+            var subscriber = new EventingBasicConsumer(channel);
+            var queueName = channel.QueueDeclare().QueueName;
+            var routeKey = "Info.#";
+            channel.QueueBind(queueName, "logs-topic",routeKey);
+            channel.BasicConsume(queueName, false, subscriber);
 
             Console.WriteLine("Loglar dinleniyor...");
+             
+            subscriber.Received += (sender, e) =>
+            {
+                var message = Encoding.UTF8.GetString(e.Body.ToArray());
+                Thread.Sleep(1500);
+                Console.WriteLine("Gelen Mesaj: " + message);
+                // File.AppendAllText($"log-{logType.ToLower()}.txt", message + "\n");
+                channel.BasicAck(e.DeliveryTag, false);
+            };
+
             Console.ReadLine();
         }
     }
