@@ -1,5 +1,7 @@
 ﻿using RabbitMQ.Client;
+using Shared;
 using System.Text;
+using System.Text.Json;
 
 public enum LogNames
 {
@@ -24,29 +26,51 @@ class Program
 
         //channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
 
-        channel.ExchangeDeclare("logs-topic", durable: true, type: ExchangeType.Topic); // üst satırda mesajları direkt kuyruğa gönderdik. Burada Exchange üzerinden kuyruğa göndereceğiz.Fark bu
+        channel.ExchangeDeclare("header-exchange", durable: true, type: ExchangeType.Headers); // üst satırda mesajları direkt kuyruğa gönderdik. Burada Exchange üzerinden kuyruğa göndereceğiz.
 
-        Random rnd = new Random();
-        Enumerable.Range(1, 50).ToList().ForEach(x =>
+        var headers = new Dictionary<string, object>
         {
-            LogNames log1 = (LogNames)rnd.Next(1, 5);
-            LogNames log2 = (LogNames)rnd.Next(1, 5);
-            LogNames log3 = (LogNames)rnd.Next(1, 5);
+            { "format", "pdf" },
+            { "shape", "a4" }
+        };
 
-            var routeKey = $"{log1}.{log2}.{log3}";
 
-            string message = $"log-type: {log1}-{log2}-{log3}";
+        var properties =channel.CreateBasicProperties();
+        properties.Headers=headers;
+        properties.Persistent = true; // RabbitMQ restart edilse bile bu kod ile mesajlar kaybolmayacak
 
-            var messageBody = Encoding.UTF8.GetBytes(message);
+        var product = new Product 
+        { 
+            Id = 1, Name = "Laptop",
+            Price = 35000,
+            Stock = 1500 
+        };
 
-            channel.BasicPublish("logs-topic", routeKey, null, messageBody);
+        var productJsonString=JsonSerializer.Serialize(product);
 
-            Console.WriteLine($"Log Gönderilmiştir : {message}");
-  
-        });
+        channel.BasicPublish("header-exchange", string.Empty, properties, Encoding.UTF8.GetBytes(productJsonString));
+
+        Console.WriteLine("Mesaj Gönderilmiştir");
+
         Console.ReadLine();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     /*
     RabbitMQ, uygulamalar arasında asenkron mesajlaşma ve işleme için kullanılan popüler bir mesaj kuyruğu sistemidir. Temel mantığı, mesajların güvenli, güvenilir ve verimli bir şekilde bir yerden başka bir yere iletilmesini sağlamaktır. RabbitMQ, mesajları geçici olarak saklar ve alıcıların (subscribers) onları almasını sağlar.
 
