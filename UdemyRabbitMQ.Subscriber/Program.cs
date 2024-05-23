@@ -1,39 +1,45 @@
 ﻿using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Reflection;
+using System;
+using System.IO;
 using System.Text;
+using System.Threading;
 
-var factory = new ConnectionFactory(); // ConnectionFactory sınıfından factory adında nesne oluşturduk.
-factory.Uri = new Uri("amqps://dvunsgiv:L_l7SXKm58FN8dA6e_hjDRnMj2jDaRqQ@moose.rmq.cloudamqp.com/dvunsgiv"); // ConnectionFactory sınıfında Uri propertysine cloud tarafındaki adresi tanımladık.
-
-using var connection = factory.CreateConnection(); // factory nesnesi üzerinden ConnectionFactory sınıfındaki CreateConnection metodunu çağırarak connection açtık.
-
-var channel = connection.CreateModel(); // RabbitMQ'ya bu kanal üzerinden bağlanacağız.
-
-//channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
-channel.ExchangeDeclare("logs-fanout", durable: true, type: ExchangeType.Fanout);
-
-var randomQueuName=channel.QueueDeclare().QueueName; // Rastgele kuyruk oluşturduk. Bu kuyruk, geçici bir kuyruk olacak ve RabbitMQ, bağlantı kapandığında bu kuyruk otomatik olarak silinecek.
-
-//var randomQueuName = "log-database-save-queue"; // Yukarıdaki geçici kuyruktu. Burada kalıcı kuyruk oluşturduk.
-
-// channel.QueueDeclare(randomQueuName,true,false,false); // Kuyruğu declare ettik
-
-channel.QueueBind(randomQueuName, "logs-fanout", " ", null); // Yukarıda oluşturduğumuz rastgele kuyruğu exchange ile bind ettik
-
-channel.BasicQos(0, 1, false);
-
-var subscriber=new EventingBasicConsumer(channel); // EventingBasicConsumer ile bir tüketici oluşturulur ve channel parametresi ile bu tüketicinin hangi kanalı kullanacağı belirtilir.
-
-channel.BasicConsume(randomQueuName,false,subscriber); // channel üzerinden BasicConsume metodunu çağırdık. BasicConsume, metodundaki autoAck parametresi true yapıldı. Çünkü mesaj, subscriber                                                                tarafından teslim alınınca mesajı kuyruktan sil. RealTime'da bu false yapılır. yani biz istediğimiz zaman silinsin
-
-Console.WriteLine("Loglar dinleniyor...");
-subscriber.Received += (object? sender, BasicDeliverEventArgs e) =>
+namespace UdemyRabbitMQ.Subscriber
 {
-    var message=Encoding.UTF8.GetString(e.Body.ToArray());
-    Thread.Sleep(1500); // süre belirlendi
-    Console.WriteLine("Gelen Mesaj: " + message);
-    channel.BasicAck(e.DeliveryTag, false);
-}; 
- 
-Console.ReadLine();
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var factory = new ConnectionFactory
+            {
+                Uri = new Uri("amqps://dvunsgiv:L_l7SXKm58FN8dA6e_hjDRnMj2jDaRqQ@moose.rmq.cloudamqp.com/dvunsgiv")
+            };
+
+            using var connection = factory.CreateConnection();
+            var channel = connection.CreateModel();
+            channel.BasicQos(0, 1, false);
+
+            var logTypes = new string[] { "Critical", "Error", "Warning", "Info" };
+
+            foreach (var logType in logTypes)
+            {
+                var queueName = $"direct-queue-{logType}";
+                var subscriber = new EventingBasicConsumer(channel);
+                subscriber.Received += (sender, e) =>
+                {
+                    var message = Encoding.UTF8.GetString(e.Body.ToArray());
+                    Thread.Sleep(1500);
+                    Console.WriteLine($"Gelen Mesaj: {message}");
+                    // File.AppendAllText($"log-{logType.ToLower()}.txt", message + "\n");
+                    channel.BasicAck(e.DeliveryTag, false);
+                };
+
+                channel.BasicConsume(queueName, false, subscriber);
+            }
+
+            Console.WriteLine("Loglar dinleniyor...");
+            Console.ReadLine();
+        }
+    }
+}

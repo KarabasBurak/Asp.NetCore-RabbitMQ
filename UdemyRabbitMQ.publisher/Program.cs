@@ -1,44 +1,57 @@
-﻿// See https://aka.ms/new-console-template for more information
-
-
-
-using RabbitMQ.Client;
-using RabbitMQ.Client.Exceptions;
+﻿using RabbitMQ.Client;
 using System.Text;
 
-var factory = new ConnectionFactory(); // ConnectionFactory sınıfından factory adında nesne oluşturduk.
-factory.Uri = new Uri("amqps://dvunsgiv:L_l7SXKm58FN8dA6e_hjDRnMj2jDaRqQ@moose.rmq.cloudamqp.com/dvunsgiv"); // ConnectionFactory sınıfında Uri propertysine cloud tarafındaki adresi tanımladık.
-
-using var connection = factory.CreateConnection(); // factory nesnesi üzerinden ConnectionFactory sınıfındaki CreateConnection metodunu çağırarak connection açtık.
-
-var channel = connection.CreateModel(); // RabbitMQ'ya bu kanal üzerinden bağlanacağız.
-
-//channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
-
-channel.ExchangeDeclare("logs-fanout", durable: true, type: ExchangeType.Fanout); // üst satırda mesajları direkt kuyruğa gönderiyorduk. Burada Exchange üzerinden kuyruğa göndereceğiz. Fark bu
-
-Enumerable.Range(1, 50).ToList().ForEach(x =>
+public enum LogNames
 {
-    string message = $"log {x}";
+    Critical=1,
+    Error=2,
+    Warning=3,
+    Info=4
+}
 
-    var messageBody = Encoding.UTF8.GetBytes(message);
+class Program
+{
+    static void Main(string[] args)
+    {
 
-    channel.BasicPublish("logs-fanout", " " , null, messageBody);
+        var factory = new ConnectionFactory(); // ConnectionFactory sınıfından factory adında nesne oluşturduk.
 
-    Console.WriteLine($"Mesaj Gönderilmiştir : {message}");
-});
+        factory.Uri = new Uri("amqps://dvunsgiv:L_l7SXKm58FN8dA6e_hjDRnMj2jDaRqQ@moose.rmq.cloudamqp.com/dvunsgiv"); // ConnectionFactory sınıfında Uri propertysine cloud tarafındaki adresi tanımladık.
 
-string message = "hello world"; // Kuyruktaki mesajı tanımladık.
+        using var connection = factory.CreateConnection(); // factory nesnesi üzerinden ConnectionFactory sınıfındaki CreateConnection metodunu çağırarak connection açtık.
 
-var messageBody=Encoding.UTF8.GetBytes(message);
+        var channel = connection.CreateModel(); // RabbitMQ'ya bu kanal üzerinden bağlanacağız.
 
-channel.BasicPublish(string.Empty, "hello-queue", null, messageBody);
+        //channel.QueueDeclare("hello-queue", true, false, false); // Kanal üzerinde kuyruk oluşturduk. Name, durable, exclusive, autoDelete propertylerin true,false durumlarını belirledik.
 
-Console.WriteLine("Mesaj Gönderilmiştir.");
+        channel.ExchangeDeclare("logs-direct", durable: true, type: ExchangeType.Direct); // üst satırda mesajları direkt kuyruğa gönderdik. Burada Exchange üzerinden kuyruğa göndereceğiz.Fark bu
 
-Console.ReadLine();
+        Enum.GetNames(typeof(LogNames)).ToList().ForEach(x =>
+        {
+            var routeKey = $"route-{x}";
+            var queueName = $"direct-queue-{x}"; // Kuyruk ismini oluşturduk
+            channel.QueueDeclare(queueName, true, false, false); // Kuyruk, kanal üzerinden declare edildi
+            channel.QueueBind(queueName, "logs-direct", routeKey,null); // Kuyruk, kanal üzerinden DirectExchange'e bağlandı
+        });
 
+        Enumerable.Range(1, 50).ToList().ForEach(x =>
+        {
+            LogNames log = (LogNames)new Random().Next(1,5);
 
+            string message = $"log-type: {log}";
+
+            var messageBody = Encoding.UTF8.GetBytes(message);
+
+            var routeKey = $"route-{log}";
+
+            channel.BasicPublish("logs-direct", routeKey, null, messageBody);
+
+            Console.WriteLine($"Log Gönderilmiştir : {message}");
+  
+        });
+        Console.ReadLine();
+    }
+}
     /*
     RabbitMQ, uygulamalar arasında asenkron mesajlaşma ve işleme için kullanılan popüler bir mesaj kuyruğu sistemidir. Temel mantığı, mesajların güvenli, güvenilir ve verimli bir şekilde bir yerden başka bir yere iletilmesini sağlamaktır. RabbitMQ, mesajları geçici olarak saklar ve alıcıların (subscribers) onları almasını sağlar.
 
